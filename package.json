@@ -1,5 +1,5 @@
 {
-  "name": "react-stickynode",
+  "name": "@moviepilot/react-stickynode",
   "version": "1.0.23",
   "description": "A performant and comprehensive React sticky",
   "main": "index.js",
