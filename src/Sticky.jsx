@@ -196,9 +196,9 @@ class Sticky extends Component {
       var settings = this.props.threshold;
       if (settings) {
           if(settings.enableAtThreshold){
-            return self.scrollY < settings.yPosition;
+            return scrollTop < settings.yPosition;
           } else {
-            return self.scrollY > settings.yPosition;
+            return scrollTop > settings.yPosition;
           }
       } else {
           return false;
