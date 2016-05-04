@@ -157,6 +157,12 @@ class Sticky extends Component {
         var height = innerRect.height || innerRect.bottom - innerRect.top;;
         var outerY = outerRect.top + scrollTop;
 
+        if(self.props.threshold && self.props.threshold.enableAtThreshold){
+          var topBoundary = self.props.threshold.yPosition;
+        } else {
+          var topBoundary = outerY;
+        }
+
         self.setState({
             top: self.getTopPosition(options.top),
             bottom: Math.min(self.state.top + height, winHeight),
@@ -165,7 +171,7 @@ class Sticky extends Component {
             x: outerRect.left,
             y: outerY,
             bottomBoundary: self.getBottomBoundary(options.bottomBoundary),
-            topBoundary: outerY
+            topBoundary: topBoundary
         });
     }
 
@@ -187,11 +193,15 @@ class Sticky extends Component {
     }
 
     crossedThreshold () {
-      var settings = this.props.threshold
-      if (settings){
-        return settings.enableAtThreshold !== self.scrollY >= settings.yPosition;
+      var settings = this.props.threshold;
+      if (settings) {
+          if(settings.enableAtThreshold){
+            return self.scrollY < settings.yPosition;
+          } else {
+            return self.scrollY > settings.yPosition;
+          }
       } else {
-        return false;
+          return false;
       }
     }
 
