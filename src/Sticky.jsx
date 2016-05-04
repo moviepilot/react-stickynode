@@ -186,6 +186,15 @@ class Sticky extends Component {
         this.update();
     }
 
+    crossedThreshold () {
+      var settings = this.props.threshold
+      if (settings){
+        return settings.enableAtThreshold !== self.scrollY >= settings.yPosition;
+      } else {
+        return false;
+      }
+    }
+
     /**
      * Update Sticky position.
      */
@@ -195,7 +204,7 @@ class Sticky extends Component {
             self.state.bottomBoundary - self.state.topBoundary <= self.state.height ||
             (self.state.width === 0 && self.state.height === 0);
 
-        if (disabled) {
+        if (disabled || self.crossedThreshold()) {
             if (self.state.status !== STATUS_ORIGINAL) {
                 self.reset();
             }
@@ -395,7 +404,11 @@ Sticky.propTypes = {
     ]),
     enableTransforms: PropTypes.bool,
     activeClass: PropTypes.string,
-    onStateChange: PropTypes.func
+    onStateChange: PropTypes.func,
+    threshold: PropTypes.shape({
+      yPosition: PropTypes.int,
+      enableAtThreshold: PropTypes.bool
+    })
 };
 
 Sticky.STATUS_ORIGINAL = STATUS_ORIGINAL;
