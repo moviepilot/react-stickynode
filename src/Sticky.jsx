@@ -149,16 +149,20 @@ class Sticky extends Component {
         var self = this;
 
         var {outer, inner} = self.refs;
+        var gads = inner.firstChild;
 
         var outerRect = outer.getBoundingClientRect();
         var innerRect = inner.getBoundingClientRect();
+        var gadRect = gads ? gads.getBoundingClientRect() : innerRect;
 
         var width = outerRect.width || outerRect.right - outerRect.left;
-        var height = innerRect.height || innerRect.bottom - innerRect.top;;
+        var height = innerRect.height || innerRect.bottom - innerRect.top;
         var outerY = outerRect.top + scrollTop;
 
+        var top = self.props.adIsSticky ? self.getTopPosition(options.top) : self.getTopPosition(options.top) - gadRect.height
+
         self.setState({
-            top: self.getTopPosition(options.top),
+            top: top,
             bottom: Math.min(self.state.top + height, winHeight),
             width: width,
             height: height,
@@ -167,6 +171,46 @@ class Sticky extends Component {
             bottomBoundary: self.getBottomBoundary(options.bottomBoundary),
             topBoundary: outerY
         });
+    }
+
+    checkAdState (options) {
+      var self = this;
+
+      if(this.state.adTweeningDone){
+        return ;
+      }
+
+      var { inner } = self.refs;
+
+      if( !inner.firstChild ){
+        return
+      }
+
+      options = options || {};
+      var gads = inner.firstChild;
+      var innerRect = inner.getBoundingClientRect();
+      var gadHeight = gads ? gads.getBoundingClientRect().height : 0;
+
+      if (self.state.adIsSticky !== self.props.adIsSticky){
+        self.setState({adIsSticky: self.props.adIsSticky})
+      }
+
+      if(self.state.adIsSticky){
+        inner.classList.add('has-animated-ad')
+        self.setState({top: self.getTopPosition(options.top)})
+      }else{
+        var isSticky = inner.classList.contains('has-animated-ad')
+        // transition ended or scolled to the top
+        var reachedFinalPosition = innerRect.top === -gadHeight || inner.style.position === "relative"
+        if(isSticky){
+          if(reachedFinalPosition){
+            self.setState({adTweeningDone: true})
+            inner.classList.remove('has-animated-ad')
+          }else{
+            self.setState({top: self.getTopPosition(options.top) - gadHeight})
+          }
+        }
+      }
     }
 
     handleResize (e, ae) {
@@ -183,6 +227,7 @@ class Sticky extends Component {
     handleScroll (e, ae) {
         scrollDelta = ae.scroll.delta;
         scrollTop = ae.scroll.top;
+        this.checkAdState();
         this.update();
     }
 
@@ -314,6 +359,8 @@ class Sticky extends Component {
         // when mount, the scrollTop is not necessary on the top
         scrollTop = docBody.scrollTop + docEl.scrollTop;
 
+        self.setState({ adIsSticky: self.props.adIsSticky });
+
         if (self.props.enabled) {
             self.setState({activated: true});
             self.updateInitialDimension();
@@ -370,6 +417,7 @@ Sticky.displayName = 'Sticky';
 
 Sticky.defaultProps = {
     enabled: true,
+    adIsSticky: true,
     top: 0,
     bottomBoundary: 0,
     enableTransforms: true,
@@ -386,6 +434,7 @@ Sticky.defaultProps = {
  */
 Sticky.propTypes = {
     enabled: PropTypes.bool,
+    adIsSticky: PropTypes.bool,
     top: PropTypes.oneOfType([
         PropTypes.string,
         PropTypes.number
