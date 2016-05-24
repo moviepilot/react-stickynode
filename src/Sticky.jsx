@@ -30,6 +30,10 @@ var scrollTop = -1;
 var win;
 var winHeight = -1;
 
+const FLEETY_WILL_TWEEN = 0
+const FLEETY_IS_TWEENING = 1
+const FLEETY_TWEENED = 2
+
 if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     win = window;
     doc = document;
@@ -60,6 +64,7 @@ class Sticky extends Component {
         this.subscribers;
 
         this.state = {
+            fleetingStickyState: FLEETY_WILL_TWEEN,
             top: 0, // A top offset from viewport top where Sticky sticks to when scrolling up
             bottom: 0, // A bottom offset from viewport top where Sticky sticks to when scrolling down
             width: 0, // Sticky width
@@ -148,21 +153,24 @@ class Sticky extends Component {
         options = options || {}
         var self = this;
 
-        var {outer, inner} = self.refs;
-        var gads = inner.firstChild;
+        var {outer, inner, fleetingSticky} = self.refs;
+        var fleetingStickyActive = 'fleetingStickyActive' in options ? options.fleetingStickyActive : self.props.fleetingStickyActive;
 
         var outerRect = outer.getBoundingClientRect();
         var innerRect = inner.getBoundingClientRect();
-        var gadRect = gads ? gads.getBoundingClientRect() : innerRect;
 
         var width = outerRect.width || outerRect.right - outerRect.left;
         var height = innerRect.height || innerRect.bottom - innerRect.top;
         var outerY = outerRect.top + scrollTop;
 
-        var top = self.props.adIsSticky ? self.getTopPosition(options.top) : self.getTopPosition(options.top) - gadRect.height
+        var conciderFleetingSticky = !fleetingStickyActive && fleetingSticky && scrollTop > 0
+        var fleetingStickyHeight = conciderFleetingSticky ? fleetingSticky.getBoundingClientRect().height : 0
+
+        var pos = conciderFleetingSticky ? self.getTopPosition(options.top) - fleetingStickyHeight : self.state.pos
 
         self.setState({
-            top: top,
+            top: self.getTopPosition(options.top) - fleetingStickyHeight,
+            pos: pos,
             bottom: Math.min(self.state.top + height, winHeight),
             width: width,
             height: height,
@@ -173,42 +181,32 @@ class Sticky extends Component {
         });
     }
 
-    checkAdState (options) {
+    checkFleetingSticky (nextProps) {
       var self = this;
 
-      if(this.state.adTweeningDone){
-        return ;
+      var { fleetingSticky } = self.refs;
+
+      if (self.state.fleetingStickyState === FLEETY_TWEENED || !fleetingSticky) {
+          return;
       }
 
-      var { inner } = self.refs;
+      var props = nextProps ? nextProps : this.props;
+      var { fleetingStickyActive } = props;
 
-      if( !inner.firstChild ){
-        return
-      }
+      if (!fleetingStickyActive){
+        var inner = self.refs.inner;
 
-      options = options || {};
-      var gads = inner.firstChild;
-      var innerRect = inner.getBoundingClientRect();
-      var gadHeight = gads ? gads.getBoundingClientRect().height : 0;
-
-      if (self.state.adIsSticky !== self.props.adIsSticky){
-        self.setState({adIsSticky: self.props.adIsSticky})
-      }
-
-      if(self.state.adIsSticky){
-        inner.classList.add('has-animated-ad')
-        self.setState({top: self.getTopPosition(options.top)})
-      }else{
-        var isSticky = inner.classList.contains('has-animated-ad')
-        // transition ended or scolled to the top
-        var reachedFinalPosition = innerRect.top === -gadHeight || inner.style.position === "relative"
-        if(isSticky){
-          if(reachedFinalPosition){
-            self.setState({adTweeningDone: true})
-            inner.classList.remove('has-animated-ad')
-          }else{
-            self.setState({top: self.getTopPosition(options.top) - gadHeight})
-          }
+        var innerRectTop = inner.getBoundingClientRect().top;
+        var fleetingStickyHeight = fleetingSticky.getBoundingClientRect().height;
+        var reachedFinalPosition = innerRectTop === -fleetingStickyHeight || self.state.status !== STATUS_FIXED
+        if (reachedFinalPosition){
+          this.setState({
+              fleetingStickyState: FLEETY_TWEENED
+          });
+        } else {
+          this.setState({
+              fleetingStickyState: FLEETY_IS_TWEENING
+          });
         }
       }
     }
@@ -222,12 +220,12 @@ class Sticky extends Component {
     handleScrollStart (e, ae) {
         scrollTop = ae.scroll.top;
         this.updateInitialDimension();
+        this.checkFleetingSticky();
     }
 
     handleScroll (e, ae) {
         scrollDelta = ae.scroll.delta;
         scrollTop = ae.scroll.top;
-        this.checkAdState();
         this.update();
     }
 
@@ -323,8 +321,9 @@ class Sticky extends Component {
     }
 
     componentWillReceiveProps (nextProps) {
-        this.updateInitialDimension(nextProps);
+        this.checkFleetingSticky(nextProps);
         this.update();
+        this.updateInitialDimension(nextProps);
     }
 
     componentDidUpdate(prevProps, prevState) {
@@ -359,8 +358,6 @@ class Sticky extends Component {
         // when mount, the scrollTop is not necessary on the top
         scrollTop = docBody.scrollTop + docEl.scrollTop;
 
-        self.setState({ adIsSticky: self.props.adIsSticky });
-
         if (self.props.enabled) {
             self.setState({activated: true});
             self.updateInitialDimension();
@@ -387,8 +384,17 @@ class Sticky extends Component {
         return !isEqual(this.props, nextProps) || !isEqual(this.state, nextState);
     }
 
+    handleOnTransitionEnd () {
+      this.setState({
+          fleetingStickyState: FLEETY_TWEENED
+      });
+    }
+
     render () {
         var self = this;
+
+        var { fleetingStickyActive } = self.props
+
         // TODO, "overflow: auto" prevents collapse, need a good way to get children height
         var innerStyle = {
             position: self.state.status === STATUS_FIXED ? 'fixed' : 'relative',
@@ -403,13 +409,26 @@ class Sticky extends Component {
             outerStyle.height = self.state.height + 'px';
         }
 
+        var regularChildren = ''
+        var fleetingSticky = ''
+
+        if(self.props.children){
+          regularChildren = self.props.children.filter(function(e){return e.ref !== 'fleetingSticky'})
+          fleetingSticky = self.props.children.find(function(e){return e.ref === 'fleetingSticky'})
+        }
+
         return (
             <div ref='outer' className={classNames('sticky-outer-wrapper', self.props.className, {[self.props.activeClass]: self.state.status === STATUS_FIXED})} style={outerStyle}>
-                <div ref='inner' className='sticky-inner-wrapper' style={innerStyle}>
-                    {self.props.children}
+                <div ref='inner' onTransitionEnd={self.handleOnTransitionEnd.bind(self)} className={classNames('sticky-inner-wrapper', self.state.fleetingStickyState === FLEETY_IS_TWEENING ? 'has-transition' : '')} style={innerStyle}>
+                  <div ref='fleetingSticky' className={classNames('fleeting-sticky', fleetingStickyActive ? 'is-sticky' : 'was-sticky')} >
+                    {fleetingSticky}
+                  </div>
+                  {regularChildren}
                 </div>
             </div>
         );
+
+
     }
 }
 
@@ -417,7 +436,7 @@ Sticky.displayName = 'Sticky';
 
 Sticky.defaultProps = {
     enabled: true,
-    adIsSticky: true,
+    fleetingStickyActive: true,
     top: 0,
     bottomBoundary: 0,
     enableTransforms: true,
@@ -434,7 +453,7 @@ Sticky.defaultProps = {
  */
 Sticky.propTypes = {
     enabled: PropTypes.bool,
-    adIsSticky: PropTypes.bool,
+    fleetingStickyActive: PropTypes.bool,
     top: PropTypes.oneOfType([
         PropTypes.string,
         PropTypes.number
