@@ -382,7 +382,6 @@ class Sticky extends Component {
           var wrapperStyle = {
             position: '-webkit-sticky',
             top: self.state.top,
-            transition: 'top 0.3s',
             overflow: 'visible',
             display: 'block',
             left: 0,
