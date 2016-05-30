@@ -389,7 +389,7 @@ class Sticky extends Component {
             right: 0,
             width: 'auto',
             bottom: 'auto',
-            margin: '0',
+            margin: 0,
             zIndex: 10
           };
           var stickyStyle = {};
