@@ -12,6 +12,17 @@ import {subscribe} from 'subscribe-ui-event';
 import classNames from 'classnames';
 import isEqual from 'is-equal-shallow';
 
+const featureTest = (property, value, noPrefixes) => {
+  // Thanks Modernizr! https://github.com/phistuck/Modernizr/commit/3fb7217f5f8274e2f11fe6cfeda7cfaf9948a1f5
+  var prop = property + ':', el = document.createElement( 'test' ), mStyle = el.style;
+  if (!noPrefixes) {
+    mStyle.cssText = prop + [ '-webkit-', '-moz-', '-ms-', '-o-', '' ].join( value + ';' + prop ) + value + ';';
+  } else {
+    mStyle.cssText = prop + value;
+  }
+  return mStyle[ property ].indexOf( value ) !== -1;
+}
+
 // constants
 const STATUS_ORIGINAL = 0; // The default status, locating at the original position.
 const STATUS_RELEASED = 1; // The released status, locating at somewhere on document but not default one.
@@ -29,6 +40,8 @@ var scrollDelta = 0;
 var scrollTop = -1;
 var win;
 var winHeight = -1;
+var winWidth = -1;
+var nativeSticky = false;
 
 if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     win = window;
@@ -37,7 +50,9 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     docBody = doc.body;
     scrollTop = docBody.scrollTop + docEl.scrollTop;
     winHeight = win.innerHeight || docEl.clientHeight;
+    winWidth = win.innerWidth || docEl.clientWidth;
     M = window.Modernizr;
+    nativeSticky = featureTest('position', 'sticky');
     // No Sticky on lower-end browser when no Modernizr
     if (M) {
         canEnableTransforms = M.csstransforms3d;
@@ -48,9 +63,12 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
 class Sticky extends Component {
     constructor (props, context) {
         super(props, context);
-        this.handleResize = this.handleResize.bind(this);
-        this.handleScroll = this.handleScroll.bind(this);
-        this.handleScrollStart = this.handleScrollStart.bind(this);
+
+        if (!nativeSticky) {
+          this.handleResize = this.handleResize.bind(this);
+          this.handleScroll = this.handleScroll.bind(this);
+          this.handleScrollStart = this.handleScrollStart.bind(this);
+        }
         this.delta = 0;
         this.stickyTop = 0;
         this.stickyBottom = 0;
@@ -63,7 +81,7 @@ class Sticky extends Component {
         this.state = {
             top: 0, // A top offset from viewport top where Sticky sticks to when scrolling up
             bottom: 0, // A bottom offset from viewport top where Sticky sticks to when scrolling down
-            width: 0, // Sticky width
+            width: 0, // Pusher width
             height: 0, // Sticky height
             x: 0, // The original x of Sticky
             y: 0, // The original y of Sticky
@@ -149,24 +167,24 @@ class Sticky extends Component {
         options = options || {}
         var self = this;
 
-        var {outer, inner} = self.refs;
+        var {contentPusher, stickyElement} = self.refs;
 
-        var outerRect = outer.getBoundingClientRect();
-        var innerRect = inner.getBoundingClientRect();
+        var contentPusherRect = contentPusher.getBoundingClientRect();
+        var innerRect = stickyElement.getBoundingClientRect();
 
-        var width = outerRect.width || outerRect.right - outerRect.left;
+        var width = innerRect.width || innerRect.right - innerRect.left;
         var height = innerRect.height || innerRect.bottom - innerRect.top;;
-        var outerY = outerRect.top + scrollTop;
+        var contentPusherY = contentPusherRect.top + scrollTop;
 
         self.setState({
             top: self.getTopPosition(options.top),
             bottom: Math.min(self.state.top + height, winHeight),
             width: width,
             height: height,
-            x: outerRect.left,
-            y: outerY,
+            x: contentPusherRect.left,
+            y: contentPusherY,
             bottomBoundary: self.getBottomBoundary(options.bottomBoundary),
-            topBoundary: outerY
+            topBoundary: contentPusherY
         });
     }
 
@@ -186,13 +204,13 @@ class Sticky extends Component {
         if (this.frozen) {
             return;
         }
-        
+
         scrollTop = ae.scroll.top;
         this.updateInitialDimension();
     }
 
     handleScroll (e, ae) {
-        if (this.frozen) { 
+        if (this.frozen) {
             return;
         }
 
@@ -335,11 +353,13 @@ class Sticky extends Component {
             this.update();
         }
         // bind the listeners regardless if initially enabled - allows the component to toggle sticky functionality
-        self.subscribers = [
-            subscribe('scrollStart', self.handleScrollStart.bind(self), {useRAF: true}),
-            subscribe('scroll', self.handleScroll.bind(self), {useRAF: true, enableScrollInfo: true}),
-            subscribe('resize', self.handleResize.bind(self), {enableResizeInfo: true})
-        ];
+        if (!nativeSticky) {
+            self.subscribers = [
+                subscribe('scrollStart', self.handleScrollStart.bind(self), {useRAF: true}),
+                subscribe('scroll', self.handleScroll.bind(self), {useRAF: true, enableScrollInfo: true}),
+                subscribe('resize', self.handleResize.bind(self), {enableResizeInfo: true})
+            ];
+        }
     }
 
     translate (style, pos) {
@@ -358,23 +378,56 @@ class Sticky extends Component {
     render () {
         var self = this;
         // TODO, "overflow: auto" prevents collapse, need a good way to get children height
-        var innerStyle = {
-            position: self.state.status === STATUS_FIXED ? 'fixed' : 'relative',
-            top: self.state.status === STATUS_FIXED ? '0px' : ''
-        };
-        var outerStyle = {};
+        if (nativeSticky) {
+          var wrapperStyle = {
+            position: '-webkit-sticky',
+            top: self.state.top,
+            transition: 'top 0.3s',
+            overflow: 'visible',
+            display: 'block',
+            left: 0,
+            right: 0,
+            width: 'auto',
+            bottom: 'auto',
+            margin: '0',
+            zIndex: 10
+          };
+          var stickyStyle = {};
+          var contentPusherStyle = {};
+        } else {
+          var wrapperStyle = {};
+          var stickyStyle = {
+              position: self.state.status === STATUS_FIXED ? 'fixed' : 'absolute',
+              top: self.state.status === STATUS_FIXED ? '0px' : '',
+              transition: 'top 0.3s',
+              left: 0,
+              right: 0,
+              width: 'auto',
+              bottom: 'auto',
+              margin: '0',
+              zIndex: 10
+          };
+          // always use translate3d to enhance the performance
+          self.translate(stickyStyle, self.state.pos);
 
-        // always use translate3d to enhance the performance
-        self.translate(innerStyle, self.state.pos);
-        if (self.state.status !== STATUS_ORIGINAL) {
-            innerStyle.width = self.state.width + 'px';
-            outerStyle.height = self.state.height + 'px';
+          var contentPusherStyle = {
+            height: self.state.height + 'px',
+            width: winWidth,
+            margin: 0,
+            borderSpacing: 0,
+            border: 0,
+            padding: 0,
+            position: 'static',
+            float: 'none'
+          };
         }
 
         return (
-            <div ref='outer' className={classNames('sticky-outer-wrapper', self.props.className, {[self.props.activeClass]: self.state.status === STATUS_FIXED})} style={outerStyle}>
-                <div ref='inner' className='sticky-inner-wrapper' style={innerStyle}>
+            <div className='sticky-wrapper' style={wrapperStyle}>
+                <div ref='stickyElement' className='sticky-element' style={stickyStyle}>
                     {self.props.children}
+                </div>
+                <div ref='contentPusher' className='sticky-content-pusher' style={contentPusherStyle}>
                 </div>
             </div>
         );
