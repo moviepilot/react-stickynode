@@ -383,6 +383,7 @@ class Sticky extends Component {
             position: '-webkit-sticky',
             top: self.state.top,
             overflow: 'visible',
+            transition: 'top 0.3s',
             display: 'block',
             left: 0,
             right: 0,
@@ -398,7 +399,6 @@ class Sticky extends Component {
           var stickyStyle = {
               position: self.state.status === STATUS_FIXED ? 'fixed' : 'absolute',
               top: self.state.status === STATUS_FIXED ? '0px' : '',
-              transition: 'top 0.3s',
               left: 0,
               right: 0,
               width: 'auto',
