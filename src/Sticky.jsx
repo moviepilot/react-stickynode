@@ -20,7 +20,7 @@ const featureTest = (property, value, noPrefixes) => {
   } else {
     mStyle.cssText = prop + value;
   }
-  return mStyle[ property ].indexOf( value ) !== -1;
+  return mStyle[property] !== "" ? mStyle[ property ] : false;
 }
 
 // constants
@@ -380,7 +380,7 @@ class Sticky extends Component {
         // TODO, "overflow: auto" prevents collapse, need a good way to get children height
         if (nativeSticky) {
           var wrapperStyle = {
-            position: '-webkit-sticky',
+            position: nativeSticky,
             top: self.state.top,
             overflow: 'visible',
             transition: 'top 0.3s',
